@@ -18,7 +18,7 @@ public class App {
     Graph<String, City, Road> graph;
     GridIndex<City> gridIndex;
 
-    public App() throws FileNotFoundException {
+    public App() throws IOException {
         this.gridIndex = new GridIndex<>(50, 70, 3,City.class);
         this.graph = new Graph<>();
     }

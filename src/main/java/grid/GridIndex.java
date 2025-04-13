@@ -3,11 +3,9 @@ package main.java.grid;
 import main.java.Location;
 
 import javax.imageio.stream.IIOByteBuffer;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,7 +28,9 @@ public class GridIndex<T extends LocationInterface> {
 
     private T[][] grid_address;
 
-    private final FileReader fileReader;
+    private static final int MAX_STRING_LENGTH_IN_BLOCK = 30;
+
+    private final RandomAccessFile file;
 
     private static class GridAddressIndexes {
         int x;
@@ -42,22 +42,22 @@ public class GridIndex<T extends LocationInterface> {
         }
     }
 
-    public GridIndex(int width, int height, int blockFactor, Class<T> clazz) throws FileNotFoundException {
+    public GridIndex(int width, int height, int blockFactor, Class<T> clazz) throws IOException {
         this.width = width;
         this.height = height;
         this.horizontal_cuts = new int[]{0, height};
         this.vertical_cuts = new int[]{0, width};
         this.Tclass = clazz;
         this.grid_address = (T[][]) Array.newInstance(clazz, 1, 1);
-        String fileName = this.initFile();
-        this.fileReader = new FileReader(fileName);
+        File createdFile = this.initFile();
+        this.file = new RandomAccessFile(createdFile, "rw");
         System.out.println("fields: "+clazz.getDeclaredFields().length);
         for(int i = 0; i < clazz.getDeclaredFields().length; i++){
             System.out.println(clazz.getDeclaredFields()[i].getType());
         }
-
+        this.createControlBlock(blockFactor);
         //TODO:
-        // spočítám velikost bloku! String - každá char 2 byty, int 4 byty
+        // spočítám velikost bloku! String - každá char 2 byty  délka bude 30, int 4 byty
         // blockFactor - blokovací faktor předám konstruktorem?
         // blockSize - vypočítám blockSize -> blokovacíFaktor * velikost T? Nvm
         // blockCount - nastavím počet bloků na 1? Nebo na 0 protože se řídící nebude počítat?
@@ -101,7 +101,7 @@ public class GridIndex<T extends LocationInterface> {
         printGrid();
     }
 
-    private String initFile(){
+    private File initFile(){
         String fileName = "gridIndex-"+ UUID.randomUUID() +".bin";
         try {
             File myObj = new File(fileName);
@@ -110,16 +110,95 @@ public class GridIndex<T extends LocationInterface> {
             } else {
                 System.out.println("File already exists.");
             }
-            return fileName;
+            return myObj;
         } catch (IOException e) {
             System.out.println("An error occurred.");
-            return null;
+            throw new RuntimeException(e);
         }
     }
 
-    private void saveControlBlock(int blockFactor, int blockCount, int BlockSize ){
+    private void createControlBlock(int blockFactor) throws IOException {
+        int recordSize = calculateRecordSize(this.Tclass);
+        int blockLength = recordSize * blockFactor;
 
+        // Přejdi na začátek souboru
+        this.file.seek(0);
+
+        // Zápis řídicího bloku (zatím jednoduché metadata)
+        this.file.writeInt(recordSize);      // 4 B
+        this.file.writeInt(blockFactor);     // 4 B
+        this.file.writeInt(blockLength);     // 4 B
+        this.file.writeInt(0);               // 4 B – počet datových bloků (zatím 0)
+
+        // Celkem zapsáno: 16 bajtů
+        int metadataSize = 16;
+
+        // Vyplníme zbytek řídicího bloku nulami
+        int paddingSize = blockLength - metadataSize;
+        byte[] padding = new byte[paddingSize];
+        this.file.write(padding);
+
+        System.out.println("Record size: " + recordSize);
+        System.out.println("Block size: " + blockLength);
     }
+
+
+    private int calculateRecordSize(Class<?> clazz) {
+        int totalSize = 0;
+        Field[] fields = clazz.getDeclaredFields();
+        for (Field field : fields) {
+            totalSize += getFieldSize(field);
+        }
+        return totalSize;
+    }
+
+
+    private int getFieldSize(Field field) {
+        Class<?> type = field.getType();
+
+        if (type == int.class) return 4;
+        if (type == double.class) return 8;
+        if (type == long.class) return 8;
+        if (type == float.class) return 4;
+        if (type == short.class) return 2;
+        if (type == byte.class) return 1;
+        if (type == boolean.class) return 1;
+
+        if (type == char.class) return 2;
+
+        if (type == String.class) {
+            return 2 + MAX_STRING_LENGTH_IN_BLOCK * 2; // 2 bajty pro délku + 30 znaků * 2 bajty
+        }
+
+        // Rekurzivně – pro vnořené objekty
+        Field[] nestedFields = type.getDeclaredFields();
+        int total = 0;
+        for (Field f : nestedFields) {
+            total += getFieldSize(f);
+        }
+        return total;
+    }
+
+    private int readRecordSize() throws IOException {
+        this.file.seek(0);
+        return this.file.readInt();
+    }
+
+    private int readBlockFactor() throws IOException {
+        this.file.seek(4);
+        return this.file.readInt();
+    }
+
+    private int readBlockLength() throws IOException {
+        this.file.seek(8);
+        return this.file.readInt();
+    }
+
+    private int readNumberOfBlocks() throws IOException {
+        this.file.seek(12);
+        return this.file.readInt();
+    }
+
 
     private void saveElementToBlock(T element){
         //TODO: uloží blok s novým městem do souboru
