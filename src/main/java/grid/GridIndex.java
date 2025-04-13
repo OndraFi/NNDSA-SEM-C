@@ -2,14 +2,23 @@ package main.java.grid;
 
 import main.java.Location;
 
+import javax.imageio.stream.IIOByteBuffer;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
 public class GridIndex<T extends LocationInterface> {
     private final int width;
     private final int height;
-    private final ArrayList<T> elements = new ArrayList<>();
+//    private final ArrayList<T> elements = new ArrayList<>();
+    private final ArrayList<String> blocks = new ArrayList<>();
     private final Class<T> Tclass;
     private int[] horizontal_cuts; // z leva do prava
     private int[] vertical_cuts; // z vrchu dolu
@@ -21,6 +30,8 @@ public class GridIndex<T extends LocationInterface> {
 
     private T[][] grid_address;
 
+    private final FileReader fileReader;
+
     private static class GridAddressIndexes {
         int x;
         int y;
@@ -31,13 +42,20 @@ public class GridIndex<T extends LocationInterface> {
         }
     }
 
-    public GridIndex(int width, int height, Class<T> clazz) {
+    public GridIndex(int width, int height, int blockFactor, Class<T> clazz) throws FileNotFoundException {
         this.width = width;
         this.height = height;
         this.horizontal_cuts = new int[]{0, height};
         this.vertical_cuts = new int[]{0, width};
         this.Tclass = clazz;
         this.grid_address = (T[][]) Array.newInstance(clazz, 1, 1);
+        String fileName = this.initFile();
+        this.fileReader = new FileReader(fileName);
+        //TODO:
+        // blockFactor - blokovací faktor předám konstruktorem?
+        // blockSize - vypočítám blockSize -> blokovacíFaktor * velikost T? Nvm
+        // blockCount - nastavím počet bloků na 1? Nebo na 0 protože se řídící nebude počítat?
+        // uloží řídící blok
     }
 
     public int getWidth() {
@@ -70,10 +88,40 @@ public class GridIndex<T extends LocationInterface> {
             cut(element);
         }
 
-        elements.add(element);
+//        elements.add(element);
+        this.saveElementToBlock(element);
         mapAllCitiesToGridAddress();
 
         printGrid();
+    }
+
+    private String initFile(){
+        String fileName = "gridIndex-"+ UUID.randomUUID() +".bin";
+        try {
+            File myObj = new File(fileName);
+            if (myObj.createNewFile()) {
+                System.out.println("File created: " + myObj.getName());
+            } else {
+                System.out.println("File already exists.");
+            }
+            return fileName;
+        } catch (IOException e) {
+            System.out.println("An error occurred.");
+            return null;
+        }
+    }
+
+    private void saveElementToBlock(T element){
+        //TODO: uloží blok s novým městem do souboru
+    }
+
+    private void readBlockFromFile(){
+        // TODO: Co bude vracet? List? Pomocnou třídu blok? Nvm.
+    }
+
+    private void saveBlockToFile(List<T> block){
+        //TODO: Uloží blok do souboru
+
     }
 
     private void printGrid() {
@@ -119,12 +167,12 @@ public class GridIndex<T extends LocationInterface> {
 
     public T findElementsByCoordinates(int x, int y) throws IllegalArgumentException {
         T foundElement = null;
-        for (T element : elements) {
-            if (element.getLocation().getX() == x && element.getLocation().getY() == y) {
-                foundElement = element;
-                break;
-            }
-        }
+//        for (T element : elements) {
+//            if (element.getLocation().getX() == x && element.getLocation().getY() == y) {
+//                foundElement = element;
+//                break;
+//            }
+//        }
         return foundElement;
     }
 
@@ -251,31 +299,30 @@ public class GridIndex<T extends LocationInterface> {
         T elementInGrid = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
         int inBetween = Math.round((elementInGrid.getLocation().getY() + newElement.getLocation().getY()) / 2.0f);
 
-        boolean didChangeInBetween = false;
-
-        do {
-            didChangeInBetween = false;
-            // Check if inBetween intersects with any existing city
-            for (T element : elements) {
-                if (element != null && element.getLocation().getY() == inBetween) {
-
-                    //  v případě že řez prochází nějakým městem, tak se pokusit posunout řez, jinak výjmka, jelilkož řez nejde provézt
-                    if (canAddToInBetween(elementInGrid.getLocation().getY(), newElement.getLocation().getY(), inBetween)) {
-                        inBetween++;
-                        didChangeInBetween = true;
-                        break;
-                    } else if (canRetrieveFromInBetween(elementInGrid.getLocation().getY(), newElement.getLocation().getY(), inBetween)) {
-                        inBetween--;
-                        didChangeInBetween = true;
-                        break;
-                    } else {
-                        return false;
-//                        throw new IllegalArgumentException("Cut cannot intersect with an existing city at Y: " + inBetween);
-                    }
-
-                }
-            }
-        } while (didChangeInBetween);
+//        boolean didChangeInBetween = false;
+//
+//        do {
+//            didChangeInBetween = false;
+//            // Check if inBetween intersects with any existing city
+//            for (T element : elements) {
+//                if (element != null && element.getLocation().getY() == inBetween) {
+//
+//                    //  v případě že řez prochází nějakým městem, tak se pokusit posunout řez, jinak výjmka, jelilkož řez nejde provézt
+//                    if (canAddToInBetween(elementInGrid.getLocation().getY(), newElement.getLocation().getY(), inBetween)) {
+//                        inBetween++;
+//                        didChangeInBetween = true;
+//                        break;
+//                    } else if (canRetrieveFromInBetween(elementInGrid.getLocation().getY(), newElement.getLocation().getY(), inBetween)) {
+//                        inBetween--;
+//                        didChangeInBetween = true;
+//                        break;
+//                    } else {
+//                        return false;
+//                    }
+//
+//                }
+//            }
+//        } while (didChangeInBetween);
 
 //        System.out.println("Performing new vertical cut at y: " + inBetween + " between " + elementInGrid.getName() + " y: " + elementInGrid.getLocation().getY() + " and " + newElement.getName() + " y: " + newElement.getLocation().getY());
 
@@ -305,29 +352,28 @@ public class GridIndex<T extends LocationInterface> {
         T elementInGrid = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
         int inBetween = Math.round((elementInGrid.getLocation().getX() + newElement.getLocation().getX()) / 2.0f);
 
-        boolean didChangeInBetween = false;
-        do {
-            didChangeInBetween = false;
-            // Check if inBetween intersects with any existing city
-            for (T existingElement : elements) {
-                if (existingElement != null && existingElement.getLocation().getX() == inBetween) {
-
-                    //  v případě že řez prochází nějakým městem, tak se pokusit posunout řez, jinak výjmka, jelilkož řez nejde provézt
-                    if (canAddToInBetween(elementInGrid.getLocation().getX(), newElement.getLocation().getX(), inBetween)) {
-                        inBetween++;
-                        didChangeInBetween = true;
-                        break;
-                    } else if (canRetrieveFromInBetween(elementInGrid.getLocation().getX(), newElement.getLocation().getX(), inBetween)) {
-                        inBetween--;
-                        didChangeInBetween = true;
-                        break;
-                    } else {
-                        return false;
-//                        throw new IllegalArgumentException("Cut cannot intersect with an existing city at X: " + inBetween);
-                    }
-                }
-            }
-        } while (didChangeInBetween);
+//        boolean didChangeInBetween = false;
+//        do {
+//            didChangeInBetween = false;
+//            // Check if inBetween intersects with any existing city
+//            for (T existingElement : elements) {
+//                if (existingElement != null && existingElement.getLocation().getX() == inBetween) {
+//
+//                    //  v případě že řez prochází nějakým městem, tak se pokusit posunout řez, jinak výjmka, jelilkož řez nejde provézt
+//                    if (canAddToInBetween(elementInGrid.getLocation().getX(), newElement.getLocation().getX(), inBetween)) {
+//                        inBetween++;
+//                        didChangeInBetween = true;
+//                        break;
+//                    } else if (canRetrieveFromInBetween(elementInGrid.getLocation().getX(), newElement.getLocation().getX(), inBetween)) {
+//                        inBetween--;
+//                        didChangeInBetween = true;
+//                        break;
+//                    } else {
+//                        return false;
+//                    }
+//                }
+//            }
+//        } while (didChangeInBetween);
 
 
 //        System.out.println("Performing new vertical cut at x: " + inBetween + " between " + elementInGrid.getName() + " x: " + elementInGrid.getLocation().getX() + " and " + newElement.getName() + " x: " + newElement.getLocation().getX());
@@ -357,9 +403,9 @@ public class GridIndex<T extends LocationInterface> {
             }
         }
         // pro každé město v grafu, vložit na správné místo v grid_address
-        for (T element : elements) {
-            addElementToGridAddress(element);
-        }
+//        for (T element : elements) {
+//            addElementToGridAddress(element);
+//        }
     }
 
     private void addElementToGridAddress(T element) {

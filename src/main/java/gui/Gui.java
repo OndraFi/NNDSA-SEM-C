@@ -24,7 +24,7 @@ public class Gui extends JFrame {
     private GridIndexSearchForm gridIndexSearchForm;
 
     public Gui( GridIndex<City> gridIndex, Graph<String,City,Road> graph) {
-        super("Semestrálí práce B Ondřej Fiala");
+        super("Semestrálí práce C Ondřej Fiala");
         this.gridIndex = gridIndex;
         this.graph = graph;
         initWindow();

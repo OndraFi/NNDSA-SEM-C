@@ -7,6 +7,7 @@ import main.java.gui.Gui;
 import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -17,7 +18,7 @@ public class App {
     Graph<String, City, Road> graph;
     GridIndex<City> gridIndex;
 
-    public App() {
+    public App() throws FileNotFoundException {
         this.gridIndex = new GridIndex<>(50, 70, City.class);
         this.graph = new Graph<>();
     }
