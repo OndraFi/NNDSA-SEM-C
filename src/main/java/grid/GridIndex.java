@@ -129,9 +129,9 @@ public class GridIndex<T extends LocationInterface> {
         this.file.writeInt(blockFactor);     // 4 B
         this.file.writeInt(blockLength);     // 4 B
         this.file.writeInt(0);               // 4 B – počet datových bloků (zatím 0)
-
+        this.file.writeInt(0); // 4 B - počet entit
         // Celkem zapsáno: 16 bajtů
-        int metadataSize = 16;
+        int metadataSize = 20;
 
         // Vyplníme zbytek řídicího bloku nulami
         int paddingSize = blockLength - metadataSize;
@@ -149,6 +149,7 @@ public class GridIndex<T extends LocationInterface> {
         for (Field field : fields) {
             totalSize += getFieldSize(field);
         }
+        totalSize = totalSize + 1; // 1 byte jako flag, zda je tam zapsané město.
         return totalSize;
     }
 
