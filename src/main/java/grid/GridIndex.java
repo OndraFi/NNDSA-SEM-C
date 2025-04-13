@@ -51,7 +51,13 @@ public class GridIndex<T extends LocationInterface> {
         this.grid_address = (T[][]) Array.newInstance(clazz, 1, 1);
         String fileName = this.initFile();
         this.fileReader = new FileReader(fileName);
+        System.out.println("fields: "+clazz.getDeclaredFields().length);
+        for(int i = 0; i < clazz.getDeclaredFields().length; i++){
+            System.out.println(clazz.getDeclaredFields()[i].getType());
+        }
+
         //TODO:
+        // spočítám velikost bloku! String - každá char 2 byty, int 4 byty
         // blockFactor - blokovací faktor předám konstruktorem?
         // blockSize - vypočítám blockSize -> blokovacíFaktor * velikost T? Nvm
         // blockCount - nastavím počet bloků na 1? Nebo na 0 protože se řídící nebude počítat?
@@ -109,6 +115,10 @@ public class GridIndex<T extends LocationInterface> {
             System.out.println("An error occurred.");
             return null;
         }
+    }
+
+    private void saveControlBlock(int blockFactor, int blockCount, int BlockSize ){
+
     }
 
     private void saveElementToBlock(T element){

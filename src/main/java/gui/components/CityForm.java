@@ -11,7 +11,7 @@ import java.awt.*;
 import java.util.ArrayList;
 
 public class CityForm extends JPanel {
-    private JTextField cityNameField, xCoordField, yCoordField;
+    private JTextField cityNameField, xCoordField, yCoordField,populationField;
     private JButton addCityButton;
     private final GridIndex<City> gridIndex;
     private final Graph<String,City,Road> graph;
@@ -37,11 +37,14 @@ public class CityForm extends JPanel {
         setLayout(new GridLayout(0, 2));
 
         cityNameField = new JTextField(20);
+        populationField = new JTextField(20);
         xCoordField = new JTextField(20);
         yCoordField = new JTextField(20);
 
         add(new JLabel("City Name:"));
         add(cityNameField);
+        add(new JLabel("City Population:"));
+        add(populationField);
         add(new JLabel("X Coordinate:"));
         add(xCoordField);
         add(new JLabel("Y Coordinate:"));
@@ -54,15 +57,17 @@ public class CityForm extends JPanel {
 
     private void addCity() {
         String cityName = cityNameField.getText();
+        String populationString = populationField.getText();
         String xCoord = xCoordField.getText();
         String yCoord = yCoordField.getText();
 
         try {
+            int pupulation = Integer.parseInt(populationString);
             int x = Integer.parseInt(xCoord);
             int y = Integer.parseInt(yCoord);
 
             if (!cityName.isEmpty() && !xCoord.isEmpty() && !yCoord.isEmpty()) {
-                City city = new City(cityName, x, y);
+                City city = new City(cityName,pupulation, x, y);
                 gridIndex.add(city);
                 graph.addVertex(App.generateKey(),city);
                 cityNameField.setText("");

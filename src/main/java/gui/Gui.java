@@ -50,10 +50,10 @@ public class Gui extends JFrame {
         add(graphPanel, BorderLayout.CENTER);
 
         addCityForm();
-        addRoadForm();
+//        addRoadForm();
         addGridIndexSearchForm();
-        addGraphIOForm();
-        addDijkstraForm();
+//        addGraphIOForm();
+//        addDijkstraForm();
 
     }
 

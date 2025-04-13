@@ -26,7 +26,7 @@ public class GraphIO {
                     String cityName = parts[2];
                     int x = Integer.parseInt(parts[3]);
                     int y = Integer.parseInt(parts[4]);
-                    City city = new City(cityName, x, y);
+                    City city = new City(cityName, 50000,x, y);
                     gridIndex.add(city);
                     graph.addVertex(key, city);
                 } else if (parts[0].equals("e")) {
