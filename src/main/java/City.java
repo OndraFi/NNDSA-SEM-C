@@ -4,14 +4,18 @@ import main.java.grid.LocationInterface;
 
 public class City implements LocationInterface {
 
-    private final String name;
-    private final Location location;
-    private final int population;
+    private  String name;
+    private  Location location;
+    private  int population;
 
     public City(String name, int population, int x, int y) {
         this.location = new Location(x, y);
         this.name = name;
         this.population = population;
+    }
+
+    public City(){
+
     }
 
     public Location getLocation() {

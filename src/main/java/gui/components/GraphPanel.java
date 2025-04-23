@@ -2,7 +2,6 @@ package main.java.gui.components;
 
 import main.java.City;
 import main.java.Road;
-import main.java.graph.EdgeData;
 import main.java.graph.Graph;
 import main.java.Location;
 import main.java.grid.GridIndex;
@@ -13,12 +12,12 @@ import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.NoninvertibleTransformException;
 import java.awt.geom.Point2D;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 public class GraphPanel extends JPanel {
-    private final Graph<String, City, Road> graph;
     private final GridIndex<City> gridIndex;
     private double scaleX, scaleY;
     private final double zoomFactor = 1.0;
@@ -31,8 +30,7 @@ public class GraphPanel extends JPanel {
     private int searchRectangleX1, searchRectangleY1, searchRectangleX2, searchRectangleY2; // dimenze vyhledávaného obdélníku
     private City foundCityByCoordinates; // najité město pomocí bodu
 
-    public GraphPanel( GridIndex<City> gridIndex, Graph<String,City,Road> graph, Dimension size) {
-        this.graph = graph;
+    public GraphPanel( GridIndex<City> gridIndex, Dimension size) {
         this.gridIndex = gridIndex;
         this.setPreferredSize(size);
         calculateScaleFactors();
@@ -64,10 +62,14 @@ public class GraphPanel extends JPanel {
     private void calculateScaleFactors() {
         double maxX = 0;
         double maxY = 0;
-        for (City city : graph.getVertices().values()) {
-            Location loc = city.getLocation();
-            if (loc.getX() > maxX) maxX = loc.getX();
-            if (loc.getY() > maxY) maxY = loc.getY();
+        try {
+            for (City city : gridIndex.readAllElements()) {
+                Location loc = city.getLocation();
+                if (loc.getX() > maxX) maxX = loc.getX();
+                if (loc.getY() > maxY) maxY = loc.getY();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         scaleX = this.getPreferredSize().width / maxX;
         scaleY = this.getPreferredSize().height / maxY;
@@ -199,55 +201,31 @@ public class GraphPanel extends JPanel {
         }
 
         // Draw vertices
-        for (City city : graph.getVertices().values()) {
-            Location loc = city.getLocation();
-            int x = (int) loc.getX();
-            int y = (int) loc.getY();
-            int ovalSize = (int) Math.max(2, 1 * zoomFactor);  // Base size is 5, adjusted with zoom
+        try {
+            for (City city : gridIndex.readAllElements()) {
+                Location loc = city.getLocation();
+                int x = (int) loc.getX();
+                int y = (int) loc.getY();
+                int ovalSize = (int) Math.max(2, 1 * zoomFactor);  // Base size is 5, adjusted with zoom
 
-            if(citiesSearchedInGraphIndex != null && x >= searchRectangleX1 && x <= searchRectangleX2 && y >= searchRectangleY1 && y <= searchRectangleY2) {
-                g2.setColor(new Color(255, 205, 0)); // Blue color with 50% opacity
+                if(citiesSearchedInGraphIndex != null && x >= searchRectangleX1 && x <= searchRectangleX2 && y >= searchRectangleY1 && y <= searchRectangleY2) {
+                    g2.setColor(new Color(255, 205, 0)); // Blue color with 50% opacity
+                }
+
+                if(city.equals(foundCityByCoordinates)) {
+                    g2.setColor(Color.cyan);
+                }
+
+                // Vertex
+                g2.fillOval(x - ovalSize / 2, y - ovalSize / 2, ovalSize, ovalSize);
+                // Text
+                g2.drawString(city.getName(), x - ovalSize / 2, y - ovalSize / 2);
+
+                g2.setColor(Color.black);
             }
-
-            if(city.equals(foundCityByCoordinates)) {
-                g2.setColor(Color.cyan);
-            }
-
-            // Vertex
-            g2.fillOval(x - ovalSize / 2, y - ovalSize / 2, ovalSize, ovalSize);
-            // Text
-            g2.drawString(city.getName(), x - ovalSize / 2, y - ovalSize / 2);
-
-            g2.setColor(Color.black);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
 
-
-        // Draw edges
-        for (EdgeData<String,Road> edge : graph.getEdges()) {
-            City c1 = graph.getVertex(edge.getVertex1Key());
-            City c2 = graph.getVertex(edge.getVertex2Key());
-            if(edge.getData().isAccessible()) {
-                g2.setColor(Color.BLACK);
-            } else {
-                g2.setColor(Color.RED);
-            }
-            g2.drawLine((int) c1.getLocation().getX(), (int) c1.getLocation().getY(),
-                    (int) c2.getLocation().getX(), (int) c2.getLocation().getY());
-            // add edge weight from edge.getData().getWeight()
-            int midX = ((int) c1.getLocation().getX() + (int) c2.getLocation().getX()) / 2;
-            int midY = ((int) c1.getLocation().getY() + (int) c2.getLocation().getY()) / 2;
-            g2.drawString(String.valueOf(edge.getData().getWeight()), midX, midY);
-        }
-
-        // Draw path in green
-        if (path != null && !path.isEmpty()) {
-            g2.setColor(Color.GREEN);
-            for (int i = 0; i < path.size() - 1; i++) {
-                City c1 = graph.getVertex(path.get(i));
-                City c2 = graph.getVertex(path.get(i + 1));
-                g2.drawLine((int) c1.getLocation().getX(), (int) c1.getLocation().getY(),
-                        (int) c2.getLocation().getX(), (int) c2.getLocation().getY());
-            }
-        }
     }
 }

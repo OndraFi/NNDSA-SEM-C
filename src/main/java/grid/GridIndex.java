@@ -2,11 +2,11 @@ package main.java.grid;
 
 import main.java.Location;
 
-import javax.imageio.stream.IIOByteBuffer;
 import java.io.*;
-import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,7 +15,7 @@ import java.util.UUID;
 public class GridIndex<T extends LocationInterface> {
     private final int width;
     private final int height;
-//    private final ArrayList<T> elements = new ArrayList<>();
+    //    private final ArrayList<T> elements = new ArrayList<>();
     private final ArrayList<String> blocks = new ArrayList<>();
     private final Class<T> Tclass;
     private int[] horizontal_cuts; // z leva do prava
@@ -26,7 +26,7 @@ public class GridIndex<T extends LocationInterface> {
 
     private int lastCut = HORIZONTAL_CUT;
 
-    private T[][] grid_address;
+    private int[][] grid_address;
 
     private static final int MAX_STRING_LENGTH_IN_BLOCK = 30;
 
@@ -48,20 +48,18 @@ public class GridIndex<T extends LocationInterface> {
         this.horizontal_cuts = new int[]{0, height};
         this.vertical_cuts = new int[]{0, width};
         this.Tclass = clazz;
-        this.grid_address = (T[][]) Array.newInstance(clazz, 1, 1);
+        this.grid_address = new int[1][1];
         File createdFile = this.initFile();
         this.file = new RandomAccessFile(createdFile, "rw");
-        System.out.println("fields: "+clazz.getDeclaredFields().length);
-        for(int i = 0; i < clazz.getDeclaredFields().length; i++){
+        System.out.println("fields: " + clazz.getDeclaredFields().length);
+        for (int i = 0; i < clazz.getDeclaredFields().length; i++) {
             System.out.println(clazz.getDeclaredFields()[i].getType());
         }
         this.createControlBlock(blockFactor);
-        //TODO:
-        // spočítám velikost bloku! String - každá char 2 byty  délka bude 30, int 4 byty
-        // blockFactor - blokovací faktor předám konstruktorem?
-        // blockSize - vypočítám blockSize -> blokovacíFaktor * velikost T? Nvm
-        // blockCount - nastavím počet bloků na 1? Nebo na 0 protože se řídící nebude počítat?
-        // uloží řídící blok
+        System.out.println("Number of blocks: " + this.readNumberOfBlocks());
+        int blockNumber = this.addNewBlock();
+        System.out.println("Number of blocks: " + this.readNumberOfBlocks());
+        this.grid_address[0][0] = blockNumber;
     }
 
     public int getWidth() {
@@ -80,7 +78,35 @@ public class GridIndex<T extends LocationInterface> {
         return vertical_cuts;
     }
 
-    public void add(T element) throws IllegalArgumentException {
+//    public T read() {
+//        try {
+//            int recordSize = readRecordSize();
+//            int blockLength = readBlockLength();
+//            int blockFactor = readBlockFactor();
+//            long blockOffset = blockLength; // blok 1, protože blok 0 = řídicí
+//
+//            for (int i = 0; i < blockFactor; i++) {
+//                long recordOffset = blockOffset + (long) i * recordSize;
+//                this.file.seek(recordOffset);
+//                byte valid = this.file.readByte();
+//
+//                if (valid == 1) {
+//                    byte[] recordBytes = new byte[recordSize - 1];
+//                    this.file.readFully(recordBytes);
+//                    return deserializeRecord(recordBytes, 0); // offset = 0, protože valid už jsme přečetli
+//                }
+//            }
+//
+//            return null; // žádný platný záznam v prvním bloku
+//
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return null;
+//        }
+//    }
+
+
+    public void add(T element) throws IllegalArgumentException, IOException {
         if (element.getLocation().getX() >= width || element.getLocation().getY() >= height) {
             throw new IllegalArgumentException("Element is out of bounds");
         }
@@ -89,20 +115,44 @@ public class GridIndex<T extends LocationInterface> {
             System.out.println("Location is ocupaied, throwing exception");
             throw new IllegalArgumentException("Location is already occupied by another element or a cut. Element:" + element.toString());
         }
+        System.out.println("Number of blocks::: " + this.readNumberOfBlocks());
 
         if (shouldPerformCut(element)) {
             cut(element);
+//            long blockNumber = addNewBlock();
+//            this.saveElementToBlock(element, blockNumber); // řezal jsem takže přidávám element do nového bloku
+        } else {
+            GridAddressIndexes indexes = this.getElementGridAddressIndexes(element);
+            this.saveElementToBlock(element, this.grid_address[indexes.x][indexes.y]);
         }
 
-//        elements.add(element);
-        this.saveElementToBlock(element);
-        mapAllCitiesToGridAddress();
+        System.out.println("Number of blocks::: " + this.readNumberOfBlocks());
+
+
+//        mapAllBlocksToGridAddress();
 
         printGrid();
     }
 
-    private File initFile(){
-        String fileName = "gridIndex-"+ UUID.randomUUID() +".bin";
+    public List<T> readAllElements() throws IOException {
+        int numberOfBlocks = readNumberOfBlocks();
+        List<T> allElements = new ArrayList<>();
+
+        for (int block = 1; block <= numberOfBlocks; block++) {
+            List<T> blockElements = readBlockFromFile(block);
+            for (T element : blockElements) {
+                if (element != null) {
+                    allElements.add(element);
+                }
+            }
+        }
+
+        return allElements;
+    }
+
+
+    private File initFile() {
+        String fileName = "gridIndex-" + UUID.randomUUID() + ".bin";
         try {
             File myObj = new File(fileName);
             if (myObj.createNewFile()) {
@@ -140,6 +190,33 @@ public class GridIndex<T extends LocationInterface> {
 
         System.out.println("Record size: " + recordSize);
         System.out.println("Block size: " + blockLength);
+    }
+
+    private int addNewBlock() throws IOException {
+        int blockLength = readBlockLength();
+        int numberOfBlocks = readNumberOfBlocks();
+
+        // Spočítat offset pro nový blok
+        long newBlockOffset = (long) (numberOfBlocks + 1) * blockLength;
+
+        // Seek na konec a zapsat prázdný blok
+        this.file.seek(newBlockOffset);
+        byte[] emptyBlock = new byte[blockLength];
+        this.file.write(emptyBlock);
+
+        // Zvýšit a zapsat nový počet bloků
+        updateNumberOfBlocks(numberOfBlocks + 1);
+
+        return numberOfBlocks + 1; // vrací číslo nového bloku
+    }
+
+    private void clearBlock(int blockNumber) throws IOException {
+        int blockLength = readBlockLength();
+        long blockOffset = (long) blockNumber * blockLength;
+
+        this.file.seek(blockOffset);
+        byte[] empty = new byte[blockLength];
+        this.file.write(empty);
     }
 
 
@@ -200,19 +277,181 @@ public class GridIndex<T extends LocationInterface> {
         return this.file.readInt();
     }
 
-
-    private void saveElementToBlock(T element){
-        //TODO: uloží blok s novým městem do souboru
+    private void updateNumberOfBlocks(int numberOfBlocks) throws IOException {
+        this.file.seek(12);
+        this.file.writeInt(numberOfBlocks);
     }
 
-    private void readBlockFromFile(){
-        // TODO: Co bude vracet? List? Pomocnou třídu blok? Nvm.
+
+    private void saveElementToBlock(T element, long blockNumber) throws IOException {
+        int recordSize = readRecordSize();
+        int blockLength = readBlockLength();
+        int blockFactor = readBlockFactor();
+
+        // spočítej začátek bloku v souboru
+        long blockOffset = blockNumber * blockLength;
+
+        System.out.println("🔧 DEBUG: recordSize = " + recordSize);
+        System.out.println("🔧 DEBUG: blockLength = " + blockLength);
+        System.out.println("🔧 DEBUG: blockFactor = " + blockFactor);
+        System.out.println("🔧 DEBUG: Calculated blockOffset = " + blockOffset);
+
+        // projdi jednotlivé pozice v bloku a najdi první volnou
+        for (int i = 0; i < blockFactor; i++) {
+            long recordOffset = blockOffset + (long) i * recordSize;
+            this.file.seek(recordOffset);
+            byte valid = this.file.readByte();
+
+            if (valid == 0) {
+                // místo je volné → zapíšeme sem
+                byte[] serializedRecord = serializeRecord(element);
+                this.file.seek(recordOffset);
+                this.file.write(serializedRecord);
+                return;
+            }
+        }
+
+        throw new IOException("Blok " + blockNumber + " je plný.");
     }
 
-    private void saveBlockToFile(List<T> block){
+
+    private List<T> readBlockFromFile(long blockNumber) throws IOException {
+        int recordSize = readRecordSize();
+        int blockLength = readBlockLength();
+        int blockFactor = readBlockFactor();
+        long blockOffset = blockNumber * blockLength;
+
+        List<T> records = new ArrayList<>(blockFactor);
+
+        for (int i = 0; i < blockFactor; i++) {
+            long recordOffset = blockOffset + (long) i * recordSize;
+            this.file.seek(recordOffset);
+            byte valid = this.file.readByte();
+
+            if (valid == 1) {
+                byte[] recordBytes = new byte[recordSize - 1];
+                this.file.readFully(recordBytes);
+                T element = deserializeRecord(recordBytes, 0); // offset 0, protože jsme valid už přečetli
+                records.add(element);
+            }
+        }
+
+        return records;
+    }
+
+
+    private void saveBlockToFile(List<T> block) {
         //TODO: Uloží blok do souboru
 
     }
+
+    private byte[] serializeRecord(T obj) throws IOException {
+        try {
+            int recordSize = readRecordSize(); // z řídicího bloku
+            ByteBuffer buffer = ByteBuffer.allocate(recordSize);
+            buffer.order(ByteOrder.BIG_ENDIAN);
+
+            // 1. valid = 1 (první bajt)
+            buffer.put((byte) 1);
+
+            // 2. Zbytek: obsah atributů objektu T
+            Field[] fields = Tclass.getDeclaredFields();
+
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Object value = field.get(obj);
+                Class<?> type = field.getType();
+
+                if (type == int.class) {
+                    buffer.putInt((int) value);
+                } else if (type == String.class) {
+                    String str = (String) value;
+                    byte[] strBytes = str.getBytes(StandardCharsets.UTF_16BE);
+                    byte[] fixedLength = new byte[60]; // max 30 znaků (2 bajty/znak)
+                    System.arraycopy(strBytes, 0, fixedLength, 0, Math.min(strBytes.length, 60));
+                    buffer.put(fixedLength);
+                } else {
+                    // Vnořený objekt
+                    Field[] nestedFields = type.getDeclaredFields();
+                    for (Field nested : nestedFields) {
+                        nested.setAccessible(true);
+                        Object nestedValue = nested.get(value);
+                        Class<?> nestedType = nested.getType();
+
+                        if (nestedType == int.class) {
+                            buffer.putInt((int) nestedValue);
+                        } else if (nestedType == String.class) {
+                            String str = (String) nestedValue;
+                            byte[] strBytes = str.getBytes(StandardCharsets.UTF_16BE);
+                            byte[] fixedLength = new byte[60];
+                            System.arraycopy(strBytes, 0, fixedLength, 0, Math.min(strBytes.length, 60));
+                            buffer.put(fixedLength);
+                        } else {
+                            throw new IOException("Nepodporovaný typ ve vnořeném objektu: " + nestedType);
+                        }
+                    }
+                }
+            }
+
+            return buffer.array();
+
+        } catch (Exception e) {
+            throw new IOException("Chyba při serializaci objektu", e);
+        }
+    }
+
+
+    private T deserializeRecord(byte[] data, int offset) throws IOException {
+        try {
+            T instance = Tclass.getDeclaredConstructor().newInstance();
+            Field[] fields = Tclass.getDeclaredFields();
+
+            ByteBuffer buffer = ByteBuffer.wrap(data, offset, data.length - offset);
+            buffer.order(ByteOrder.BIG_ENDIAN);
+
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Class<?> type = field.getType();
+
+                if (type == int.class) {
+                    field.setInt(instance, buffer.getInt());
+                } else if (type == String.class) {
+                    byte[] strBytes = new byte[60]; // 30 znaků UTF-16
+                    buffer.get(strBytes);
+                    String str = new String(strBytes, StandardCharsets.UTF_16BE).trim();
+                    field.set(instance, str);
+                } else {
+                    // Předpokládáme, že je to vnořený objekt
+                    Object nestedObj = type.getDeclaredConstructor().newInstance();
+                    Field[] nestedFields = type.getDeclaredFields();
+
+                    for (Field nestedField : nestedFields) {
+                        nestedField.setAccessible(true);
+                        Class<?> nestedType = nestedField.getType();
+
+                        if (nestedType == int.class) {
+                            nestedField.setInt(nestedObj, buffer.getInt());
+                        } else if (nestedType == String.class) {
+                            byte[] nestedStrBytes = new byte[60];
+                            buffer.get(nestedStrBytes);
+                            String nestedStr = new String(nestedStrBytes, StandardCharsets.UTF_16BE).trim();
+                            nestedField.set(nestedObj, nestedStr);
+                        } else {
+                            throw new IOException("Nepodporovaný typ ve vnořeném objektu: " + nestedType);
+                        }
+                    }
+
+                    field.set(instance, nestedObj);
+                }
+            }
+
+            return instance;
+
+        } catch (Exception e) {
+            throw new IOException("Chyba při deserializaci záznamu", e);
+        }
+    }
+
 
     private void printGrid() {
         System.out.println("x: " + Arrays.toString(vertical_cuts));
@@ -221,8 +460,8 @@ public class GridIndex<T extends LocationInterface> {
 
         for (int j = 0; j < grid_address[0].length; j++) {
             for (int i = 0; i < grid_address.length; i++) {
-                if (grid_address[i][j] != null) {
-                    System.out.print(grid_address[i][j].toString() + " ");
+                if (grid_address[i][j] != 0) {
+                    System.out.print(grid_address[i][j] + " ");
                 } else {
                     System.out.print("* ");
                 }
@@ -232,12 +471,25 @@ public class GridIndex<T extends LocationInterface> {
     }
 
     private boolean isLocationOccupied(Location location) {
-        for (T[] row : grid_address) {
-            for (T element : row) {
-                if (element != null && (Math.abs(element.getLocation().getX() - location.getX()) <= 0 && Math.abs(element.getLocation().getY() - location.getY()) <= 0)) {
-//                    System.out.println("City: " + element.getName() + " is on the same location as new city: " + location.toString());
-                    return true;
+        for (int[] row : grid_address) {
+            for (int blockNumber : row) {
+                if (blockNumber != 0) {
+                    try {
+                        List<T> block = readBlockFromFile(blockNumber);
+                        for (T element : block) {
+                            if (element != null && element.getLocation().getX() == location.getX() && element.getLocation().getY() == location.getY()) {
+                                System.out.println("City: " + element + " is on the same location as new city: " + location.toString());
+                                return true;
+                            }
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
+//                if (element != null && (Math.abs(element.getLocation().getX() - location.getX()) <= 0 && Math.abs(element.getLocation().getY() - location.getY()) <= 0)) {
+//                    System.out.println("City: " + element.getName() + " is on the same location as new city: " + location.toString());
+//                    return true;
+//                }
             }
         }
         for (int cut : horizontal_cuts) {
@@ -268,53 +520,55 @@ public class GridIndex<T extends LocationInterface> {
 
     public ArrayList<T> findElementBySegment(int x1, int y1, int x2, int y2) {
 
-        if (x1 < 0 || x1 > width || y1 < 0 || y1 > height || x2 < 0 || x2 > width || y2 < 0 || y2 > height) {
-            throw new IllegalArgumentException("Coordinates are out of bounds");
-        }
-
-        int xStartIndex = -1;
-        int xEndIndex = -1;
-        for (int i = 0; i < vertical_cuts.length; i++) {
-            if (vertical_cuts[i] > x1) {
-                xStartIndex = i - 1;
-            }
-            if (vertical_cuts[i] >= x2) {
-                xEndIndex = i;
-            }
-        }
-
-        int yStartIndex = -1;
-        int yEndIndex = -1;
-
-        for (int i = 0; i < horizontal_cuts.length; i++) {
-            if (horizontal_cuts[i] > y1) {
-                yStartIndex = i - 1;
-            }
-            if (horizontal_cuts[i] >= y2) {
-                yEndIndex = i;
-            }
-        }
-
-        ArrayList<T> elements = new ArrayList<>();
-
-        for (int i = xStartIndex; i < xEndIndex; i++) {
-            for (int j = yStartIndex; j < yEndIndex; j++) {
-                if (grid_address[i][j] != null && isElementInSearchDimensions(grid_address[i][j], x1, y1, x2, y2)) {
-                    elements.add(grid_address[i][j]);
-                }
-            }
-        }
-
-        return elements;
+//        if (x1 < 0 || x1 > width || y1 < 0 || y1 > height || x2 < 0 || x2 > width || y2 < 0 || y2 > height) {
+//            throw new IllegalArgumentException("Coordinates are out of bounds");
+//        }
+//
+//        int xStartIndex = -1;
+//        int xEndIndex = -1;
+//        for (int i = 0; i < vertical_cuts.length; i++) {
+//            if (vertical_cuts[i] > x1) {
+//                xStartIndex = i - 1;
+//            }
+//            if (vertical_cuts[i] >= x2) {
+//                xEndIndex = i;
+//            }
+//        }
+//
+//        int yStartIndex = -1;
+//        int yEndIndex = -1;
+//
+//        for (int i = 0; i < horizontal_cuts.length; i++) {
+//            if (horizontal_cuts[i] > y1) {
+//                yStartIndex = i - 1;
+//            }
+//            if (horizontal_cuts[i] >= y2) {
+//                yEndIndex = i;
+//            }
+//        }
+//
+//        ArrayList<T> elements = new ArrayList<>();
+//
+//        for (int i = xStartIndex; i < xEndIndex; i++) {
+//            for (int j = yStartIndex; j < yEndIndex; j++) {
+//                if (grid_address[i][j] != null && isElementInSearchDimensions(grid_address[i][j], x1, y1, x2, y2)) {
+//                    elements.add(grid_address[i][j]);
+//                }
+//            }
+//        }
+//
+//        return elements;
+        return new ArrayList<>();
     }
 
     private boolean isElementInSearchDimensions(T element, int x1, int y1, int x2, int y2) {
         return element.getLocation().getX() >= x1 && element.getLocation().getY() >= y1 && element.getLocation().getX() <= x2 && element.getLocation().getY() <= y2;
     }
 
-    private boolean shouldPerformCut(T element) {
+    private boolean shouldPerformCut(T element) throws IOException {
         GridAddressIndexes elementGridAddressIndexes = getElementGridAddressIndexes(element);
-        return grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y] != null;
+        List<T> elements = this.readBlockFromFile(grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y]);
+        return elements.size() == this.readBlockFactor();
     }
 
     private GridAddressIndexes getElementGridAddressIndexes(T element) {
@@ -342,7 +596,7 @@ public class GridIndex<T extends LocationInterface> {
         return -1;
     }
 
-    private void cut(T element) {
+    private void cut(T element) throws IOException {
         if (lastCut == HORIZONTAL_CUT) {
             // střídám, takže chci řezat druhým směrem
             boolean cutSuccessful = performVerticalCut(element);
@@ -383,11 +637,21 @@ public class GridIndex<T extends LocationInterface> {
         return false;
     }
 
-    private boolean performHorizontalCut(T newElement) {
+    private boolean performHorizontalCut(T newElement) throws IOException {
 
         GridAddressIndexes elementGridAddressIndexes = getElementGridAddressIndexes(newElement);
-        T elementInGrid = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
-        int inBetween = Math.round((elementInGrid.getLocation().getY() + newElement.getLocation().getY()) / 2.0f);
+
+        int blockNumber = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
+        List<T> elements = this.readBlockFromFile(blockNumber);
+
+        T closestElement = elements.getFirst();
+        for (T element : elements) {
+            if (element.getLocation().getY() < closestElement.getLocation().getY()) {
+                closestElement = element;
+            }
+        }
+
+        int inBetween = Math.round((closestElement.getLocation().getY() + newElement.getLocation().getY()) / 2.0f);
 
 //        boolean didChangeInBetween = false;
 //
@@ -432,15 +696,70 @@ public class GridIndex<T extends LocationInterface> {
         System.arraycopy(horizontal_cuts, indexForInBetween, newHorizontalCuts, indexForInBetween + 1, horizontal_cuts.length - indexForInBetween);
         horizontal_cuts = newHorizontalCuts;
 
-        // vytvořím si nové pole s o jedna delšími sloupci
-        grid_address = (T[][]) Array.newInstance(Tclass, grid_address.length, grid_address[0].length + 1);
+        // 1. Vytvoření nového bloku
+        int newBlockNumber = this.addNewBlock();
+        boolean insertAbove = newElement.getLocation().getY() < closestElement.getLocation().getY();
+
+// 2. Přesun měst ze starého bloku do nového
+        List<T> originalBlockElements = new ArrayList<>(elements); // záloha pro přepis
+        originalBlockElements.add(newElement);
+        List<T> remainingInOldBlock = new ArrayList<>();
+        List<T> movedToNewBlock = new ArrayList<>();
+
+        for (T element : originalBlockElements) {
+            if (insertAbove) {
+                // nový blok jde nahoru → nahoru = Y < inBetween
+                if (element.getLocation().getY() < inBetween) {
+                    movedToNewBlock.add(element);
+                } else {
+                    remainingInOldBlock.add(element);
+                }
+            } else {
+                // nový blok jde dolů → dolů = Y > inBetween
+                if (element.getLocation().getY() > inBetween) {
+                    movedToNewBlock.add(element);
+                } else {
+                    remainingInOldBlock.add(element);
+                }
+            }
+        }
+
+// 3. Vyčistit původní blok a zapsat zpět jen ty, co zůstávají
+        this.clearBlock(blockNumber);
+        for (T e : remainingInOldBlock) {
+            this.saveElementToBlock(e, blockNumber);
+        }
+
+// 4. Zapsat nové prvky do nového bloku
+        for (T e : movedToNewBlock) {
+            this.saveElementToBlock(e, newBlockNumber);
+        }
+
+        this.applyHorizontalSplitToGrid(indexForInBetween, blockNumber, newBlockNumber, insertAbove);
+
         return true;
     }
 
-    private boolean performVerticalCut(T newElement) {
+    private boolean performVerticalCut(T newElement) throws IOException {
         GridAddressIndexes elementGridAddressIndexes = getElementGridAddressIndexes(newElement);
-        T elementInGrid = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
-        int inBetween = Math.round((elementInGrid.getLocation().getX() + newElement.getLocation().getX()) / 2.0f);
+        int blockNumber = grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y];
+        List<T> elements = this.readBlockFromFile(blockNumber);
+
+        T closestElement = null;
+        int minDistance = Integer.MAX_VALUE;
+        int newX = newElement.getLocation().getX();
+
+        for (T element : elements) {
+            if (element == null) continue;
+            int existingX = element.getLocation().getX();
+            int distance = Math.abs(existingX - newX);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestElement = element;
+            }
+        }
+
+        int inBetween = Math.round((closestElement.getLocation().getX() + newX) / 2.0f);
 
 //        boolean didChangeInBetween = false;
 //        do {
@@ -481,29 +800,123 @@ public class GridIndex<T extends LocationInterface> {
         System.arraycopy(vertical_cuts, indexForInBetween, newVerticalCuts, indexForInBetween + 1, vertical_cuts.length - indexForInBetween);
         vertical_cuts = newVerticalCuts;
 
-        grid_address = (T[][]) Array.newInstance(Tclass, grid_address.length + 1, grid_address[0].length);
+        // 1. Vytvoření nového bloku
+        int newBlockNumber = this.addNewBlock();
+        boolean insertLeft = newElement.getLocation().getX() < closestElement.getLocation().getX();
+
+// 2. Přesun měst ze starého bloku do nového
+        List<T> originalBlockElements = new ArrayList<>(elements); // záloha pro přepis
+        originalBlockElements.add(newElement);
+        List<T> remainingInOldBlock = new ArrayList<>();
+        List<T> movedToNewBlock = new ArrayList<>();
+
+        for (T element : originalBlockElements) {
+            if (insertLeft) {
+                // nový blok jde vlevo → vlevo = X < inBetween
+                if (element.getLocation().getX() < inBetween) {
+                    movedToNewBlock.add(element);
+                } else {
+                    remainingInOldBlock.add(element);
+                }
+            } else {
+                // nový blok jde doprava → doprava = X > inBetween
+                if (element.getLocation().getX() > inBetween) {
+                    movedToNewBlock.add(element);
+                } else {
+                    remainingInOldBlock.add(element);
+                }
+            }
+        }
+
+// 3. Vyčistit původní blok a zapsat zpět jen ty, co zůstávají
+        this.clearBlock(blockNumber);
+        for (T e : remainingInOldBlock) {
+            this.saveElementToBlock(e, blockNumber);
+        }
+
+// 4. Zapsat nové prvky do nového bloku
+        for (T e : movedToNewBlock) {
+            this.saveElementToBlock(e, newBlockNumber);
+        }
+
+        this.applyVerticalSplitToGrid(indexForInBetween, blockNumber, newBlockNumber, insertLeft);
+
         return true;
     }
 
-    private void mapAllCitiesToGridAddress() {
-        // grid_address naplnit null
-        for (int i = 0; i < grid_address.length; i++) {
-            for (int j = 0; j < grid_address[0].length; j++) {
-                grid_address[i][j] = null;
+    private void applyHorizontalSplitToGrid(int indexForInBetween, int blockNumber, int newBlockNumber, boolean insertAbove) {
+        int[][] originalGrid = grid_address;
+        int columns = originalGrid.length;
+        int originalRows = originalGrid[0].length;
+
+        // Vytvoř nový grid s o 1 větším počtem řádků
+        int[][] newGrid = new int[columns][originalRows + 1];
+
+        for (int col = 0; col < columns; col++) {
+            // Zkopíruj řádky s posunem
+            for (int row = 0; row < indexForInBetween; row++) {
+                newGrid[col][row] = originalGrid[col][row];
+            }
+            for (int row = indexForInBetween; row < originalRows; row++) {
+                newGrid[col][row + 1] = originalGrid[col][row];
+            }
+
+            // Rozdělení nebo zachování
+            if (originalGrid[col][indexForInBetween - 1] == blockNumber) {
+                if (insertAbove) {
+                    newGrid[col][indexForInBetween - 1] = newBlockNumber;
+                    newGrid[col][indexForInBetween] = blockNumber;
+                } else {
+                    newGrid[col][indexForInBetween - 1] = blockNumber;
+                    newGrid[col][indexForInBetween] = newBlockNumber;
+                }
+            } else {
+                // ⬅️ DŮLEŽITÉ: blok, který se nerozděluje, zkopíruj do nové řádky
+                newGrid[col][indexForInBetween] = originalGrid[col][indexForInBetween - 1];
             }
         }
-        // pro každé město v grafu, vložit na správné místo v grid_address
-//        for (T element : elements) {
-//            addElementToGridAddress(element);
-//        }
+
+
+        // Aktualizuj grid
+        grid_address = newGrid;
     }
 
-    private void addElementToGridAddress(T element) {
-        GridAddressIndexes elementGridAddressIndexes = getElementGridAddressIndexes(element);
-        if (grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y] != null) {
-            throw new IllegalArgumentException("Index is already in use!");
+
+    private void applyVerticalSplitToGrid(int indexForInBetween, int blockNumber, int newBlockNumber, boolean insertLeft) {
+        int[][] originalGrid = grid_address;
+        int originalCols = originalGrid.length;
+        int rows = originalGrid[0].length;
+
+        // Vytvoř nový grid o jeden širší (víc sloupců)
+        int[][] newGrid = new int[originalCols + 1][rows];
+
+        // Pro každý řádek
+        for (int row = 0; row < rows; row++) {
+            // Zkopíruj původní sloupce do nového gridu, s posunem za řezem
+            for (int col = 0; col < indexForInBetween; col++) {
+                newGrid[col][row] = originalGrid[col][row];
+            }
+            for (int col = indexForInBetween; col < originalCols; col++) {
+                newGrid[col + 1][row] = originalGrid[col][row];
+            }
+
+            // Rozdělení nebo zachování
+            if (originalGrid[indexForInBetween - 1][row] == blockNumber) {
+                if (insertLeft) {
+                    newGrid[indexForInBetween - 1][row] = newBlockNumber;
+                    newGrid[indexForInBetween][row] = blockNumber;
+                } else {
+                    newGrid[indexForInBetween - 1][row] = blockNumber;
+                    newGrid[indexForInBetween][row] = newBlockNumber;
+                }
+            } else {
+                // ⬅️ DŮLEŽITÉ: blok, který se nerozděluje, zkopíruj do nové pozice
+                newGrid[indexForInBetween][row] = originalGrid[indexForInBetween - 1][row];
+            }
         }
-        grid_address[elementGridAddressIndexes.x][elementGridAddressIndexes.y] = element;
+
+        // Aktualizuj grid
+        grid_address = newGrid;
     }
 
 }

@@ -19,8 +19,14 @@ public class App {
     GridIndex<City> gridIndex;
 
     public App() throws IOException {
-        this.gridIndex = new GridIndex<>(50, 70, 3,City.class);
+        this.gridIndex = new GridIndex<>(50, 70, 3, City.class);
         this.graph = new Graph<>();
+
+//        this.gridIndex.add(new City("a", 120, 5, 5));
+//        City c = this.gridIndex.read();
+//        System.out.println(c.toString());
+//        System.out.println(c.getLocation().toString());
+//        System.out.println(c.getPopulation());
     }
 
     public static String generateKey() {

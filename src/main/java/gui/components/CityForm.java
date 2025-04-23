@@ -8,6 +8,7 @@ import main.java.grid.GridIndex;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.IOException;
 import java.util.ArrayList;
 
 public class CityForm extends JPanel {
@@ -80,6 +81,8 @@ public class CityForm extends JPanel {
             JOptionPane.showMessageDialog(this, "Please enter valid coordinates", "Error", JOptionPane.ERROR_MESSAGE);
         } catch (IllegalArgumentException ex){
             JOptionPane.showMessageDialog(this, "V miste je bud mesto nebo rez: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 

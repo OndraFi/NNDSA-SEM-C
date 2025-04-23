@@ -46,7 +46,7 @@ public class Gui extends JFrame {
         add(sidebar, BorderLayout.EAST);
 
 
-        graphPanel = new GraphPanel(gridIndex, graph,new Dimension((int) Math.round(PANEL_WIDTH * 0.8), (int) Math.round(PANEL_HEIGHT * 0.8)));
+        graphPanel = new GraphPanel(gridIndex,new Dimension((int) Math.round(PANEL_WIDTH * 0.8), (int) Math.round(PANEL_HEIGHT * 0.8)));
         add(graphPanel, BorderLayout.CENTER);
 
         addCityForm();
@@ -67,9 +67,9 @@ public class Gui extends JFrame {
     private void addCityForm() {
         cityForm = new CityForm(this.gridIndex,this.graph);
         cityForm.addCityListener(() -> {
-            roadForm.mapVerticesToComboBoxes();
-            dijkstraForm.mapVerticesToComboBoxes();
-            dijkstraForm.changesWareMadeInGraph();
+//            roadForm.mapVerticesToComboBoxes();
+//            dijkstraForm.mapVerticesToComboBoxes();
+//            dijkstraForm.changesWareMadeInGraph();
             graphPanel.setCitiesSearchedInGraphIndex(null);
             graphPanel.setSearchDimensions(0,0,0,0);
             repaint();
