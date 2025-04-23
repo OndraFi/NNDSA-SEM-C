@@ -52,9 +52,17 @@ public class Gui extends JFrame {
         addCityForm();
 //        addRoadForm();
         addGridIndexSearchForm();
+        addGridIndexSaveForm();
 //        addGraphIOForm();
 //        addDijkstraForm();
 
+    }
+
+    private void addGridIndexSaveForm(){
+        SaveGridIndexToFileForm gridIndexSaveForm = new SaveGridIndexToFileForm(gridIndex);
+        sidebar.add(gridIndexSaveForm);
+        sidebar.revalidate();
+        sidebar.repaint();
     }
 
     private void addGridIndexSearchForm(){

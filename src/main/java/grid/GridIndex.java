@@ -30,7 +30,8 @@ public class GridIndex<T extends LocationInterface> {
 
     private static final int MAX_STRING_LENGTH_IN_BLOCK = 30;
 
-    private final RandomAccessFile file;
+    private RandomAccessFile file;
+    private String fileName;
 
     private static class GridAddressIndexes {
         int x;
@@ -60,6 +61,28 @@ public class GridIndex<T extends LocationInterface> {
         int blockNumber = this.addNewBlock();
         System.out.println("Number of blocks: " + this.readNumberOfBlocks());
         this.grid_address[0][0] = blockNumber;
+    }
+
+    public void saveToFile(String filename) throws IOException {
+        ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename));
+        out.writeObject(grid_address);
+        out.writeObject(horizontal_cuts);
+        out.writeObject(vertical_cuts);
+        out.writeObject(fileName); // Save the file path instead of file descriptor
+    }
+
+    public void loadFromFile(String filename) throws IOException, ClassNotFoundException {
+        ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename));
+        this.grid_address = (int[][]) in.readObject();
+        this.horizontal_cuts = (int[]) in.readObject();
+        this.vertical_cuts = (int[]) in.readObject();
+        String fileName = (String) in.readObject();
+        File fileToOpen = new File(fileName);
+        if (!fileToOpen.exists()) {
+            throw new FileNotFoundException("File not found: " + fileName);
+        }
+        this.file = new RandomAccessFile(fileToOpen, "rw");
+        in.close();
     }
 
     public int getWidth() {
@@ -153,6 +176,7 @@ public class GridIndex<T extends LocationInterface> {
 
     private File initFile() {
         String fileName = "gridIndex-" + UUID.randomUUID() + ".bin";
+        this.fileName = fileName;
         try {
             File myObj = new File(fileName);
             if (myObj.createNewFile()) {
