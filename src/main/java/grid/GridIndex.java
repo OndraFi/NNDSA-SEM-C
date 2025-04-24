@@ -76,7 +76,7 @@ public class GridIndex<T extends LocationInterface> {
         this.grid_address = (int[][]) in.readObject();
         this.horizontal_cuts = (int[]) in.readObject();
         this.vertical_cuts = (int[]) in.readObject();
-        String fileName = (String) in.readObject();
+        this.fileName = (String) in.readObject();
         File fileToOpen = new File(fileName);
         if (!fileToOpen.exists()) {
             throw new FileNotFoundException("File not found: " + fileName);
