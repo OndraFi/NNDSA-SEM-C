@@ -1,10 +1,8 @@
 package main.java.gui.components;
 
 import main.java.City;
-import main.java.Road;
-import main.java.graph.Graph;
 import main.java.Location;
-import main.java.grid.GridIndex;
+import main.java.grid.GridFile;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,11 +12,9 @@ import java.awt.geom.NoninvertibleTransformException;
 import java.awt.geom.Point2D;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
 public class GraphPanel extends JPanel {
-    private final GridIndex<City> gridIndex;
+    private final GridFile<City> gridFile;
     private double scaleX, scaleY;
     private final double zoomFactor = 1.0;
     private Point dragStartScreen;
@@ -30,8 +26,8 @@ public class GraphPanel extends JPanel {
     private int searchRectangleX1, searchRectangleY1, searchRectangleX2, searchRectangleY2; // dimenze vyhledávaného obdélníku
     private City foundCityByCoordinates; // najité město pomocí bodu
 
-    public GraphPanel( GridIndex<City> gridIndex, Dimension size) {
-        this.gridIndex = gridIndex;
+    public GraphPanel(GridFile<City> gridFile, Dimension size) {
+        this.gridFile = gridFile;
         this.setPreferredSize(size);
         calculateScaleFactors();
         setupMouseWheelZoom();
@@ -63,7 +59,7 @@ public class GraphPanel extends JPanel {
         double maxX = 0;
         double maxY = 0;
         try {
-            for (City city : gridIndex.readAllElements()) {
+            for (City city : gridFile.readAllElements()) {
                 Location loc = city.getLocation();
                 if (loc.getX() > maxX) maxX = loc.getX();
                 if (loc.getY() > maxY) maxY = loc.getY();
@@ -157,11 +153,11 @@ public class GraphPanel extends JPanel {
         g2.setFont(new Font("Arial", Font.PLAIN, fontSize));
 
         //Draw grid
-        int gridWidth = gridIndex.getWidth();
-        int gridHeight = gridIndex.getHeight();
+        int gridWidth = gridFile.getWidth();
+        int gridHeight = gridFile.getHeight();
 
-        int[] horizontal_cuts = gridIndex.getHorizontal_cuts();
-        int[] vertical_cuts = gridIndex.getVertical_cuts();
+        int[] horizontal_cuts = gridFile.getHorizontal_cuts();
+        int[] vertical_cuts = gridFile.getVertical_cuts();
 
         g2.setFont(new Font("Arial", Font.PLAIN, fontSize/3));
 
@@ -202,7 +198,7 @@ public class GraphPanel extends JPanel {
 
         // Draw vertices
         try {
-            for (City city : gridIndex.readAllElements()) {
+            for (City city : gridFile.readAllElements()) {
                 Location loc = city.getLocation();
                 int x = (int) loc.getX();
                 int y = (int) loc.getY();
@@ -212,7 +208,7 @@ public class GraphPanel extends JPanel {
                     g2.setColor(new Color(255, 205, 0)); // Blue color with 50% opacity
                 }
 
-                if(city.equals(foundCityByCoordinates)) {
+                if(foundCityByCoordinates != null && city.getLocation().getX() == foundCityByCoordinates.getLocation().getX() && city.getLocation().getY() == foundCityByCoordinates.getLocation().getY()) {
                     g2.setColor(Color.cyan);
                 }
 

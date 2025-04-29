@@ -12,11 +12,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-public class GridIndex<T extends LocationInterface> {
+public class GridFile<T extends LocationInterface> {
     private final int width;
     private final int height;
-    //    private final ArrayList<T> elements = new ArrayList<>();
-    private final ArrayList<String> blocks = new ArrayList<>();
     private final Class<T> Tclass;
     private int[] horizontal_cuts; // z leva do prava
     private int[] vertical_cuts; // z vrchu dolu
@@ -31,7 +29,12 @@ public class GridIndex<T extends LocationInterface> {
     private static final int MAX_STRING_LENGTH_IN_BLOCK = 30;
 
     private RandomAccessFile file;
-    private String fileName;
+    private String binFileName;
+    private String gridIndexFileName;
+
+    public void setGridIndexSaveFileName(String fileName) {
+        this.gridIndexFileName = fileName + ".ser";
+    }
 
     private static class GridAddressIndexes {
         int x;
@@ -43,7 +46,7 @@ public class GridIndex<T extends LocationInterface> {
         }
     }
 
-    public GridIndex(int width, int height, int blockFactor, Class<T> clazz) throws IOException {
+    public GridFile(int width, int height, int blockFactor, Class<T> clazz) throws IOException {
         this.width = width;
         this.height = height;
         this.horizontal_cuts = new int[]{0, height};
@@ -52,10 +55,7 @@ public class GridIndex<T extends LocationInterface> {
         this.grid_address = new int[1][1];
         File createdFile = this.initFile();
         this.file = new RandomAccessFile(createdFile, "rw");
-        System.out.println("fields: " + clazz.getDeclaredFields().length);
-        for (int i = 0; i < clazz.getDeclaredFields().length; i++) {
-            System.out.println(clazz.getDeclaredFields()[i].getType());
-        }
+
         this.createControlBlock(blockFactor);
         System.out.println("Number of blocks: " + this.readNumberOfBlocks());
         int blockNumber = this.addNewBlock();
@@ -63,12 +63,12 @@ public class GridIndex<T extends LocationInterface> {
         this.grid_address[0][0] = blockNumber;
     }
 
-    public void saveToFile(String filename) throws IOException {
-        ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename));
+    private void saveToFile() throws IOException {
+        ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(this.gridIndexFileName));
         out.writeObject(grid_address);
         out.writeObject(horizontal_cuts);
         out.writeObject(vertical_cuts);
-        out.writeObject(fileName); // Save the file path instead of file descriptor
+        out.writeObject(binFileName); // Save the file path instead of file descriptor
     }
 
     public void loadFromFile(String filename) throws IOException, ClassNotFoundException {
@@ -76,10 +76,10 @@ public class GridIndex<T extends LocationInterface> {
         this.grid_address = (int[][]) in.readObject();
         this.horizontal_cuts = (int[]) in.readObject();
         this.vertical_cuts = (int[]) in.readObject();
-        this.fileName = (String) in.readObject();
-        File fileToOpen = new File(fileName);
+        this.binFileName = (String) in.readObject(); // Load the file path
+        File fileToOpen = new File(binFileName);
         if (!fileToOpen.exists()) {
-            throw new FileNotFoundException("File not found: " + fileName);
+            throw new FileNotFoundException("File not found: " + binFileName);
         }
         this.file = new RandomAccessFile(fileToOpen, "rw");
         in.close();
@@ -101,34 +101,6 @@ public class GridIndex<T extends LocationInterface> {
         return vertical_cuts;
     }
 
-//    public T read() {
-//        try {
-//            int recordSize = readRecordSize();
-//            int blockLength = readBlockLength();
-//            int blockFactor = readBlockFactor();
-//            long blockOffset = blockLength; // blok 1, protože blok 0 = řídicí
-//
-//            for (int i = 0; i < blockFactor; i++) {
-//                long recordOffset = blockOffset + (long) i * recordSize;
-//                this.file.seek(recordOffset);
-//                byte valid = this.file.readByte();
-//
-//                if (valid == 1) {
-//                    byte[] recordBytes = new byte[recordSize - 1];
-//                    this.file.readFully(recordBytes);
-//                    return deserializeRecord(recordBytes, 0); // offset = 0, protože valid už jsme přečetli
-//                }
-//            }
-//
-//            return null; // žádný platný záznam v prvním bloku
-//
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//            return null;
-//        }
-//    }
-
-
     public void add(T element) throws IllegalArgumentException, IOException {
         if (element.getLocation().getX() >= width || element.getLocation().getY() >= height) {
             throw new IllegalArgumentException("Element is out of bounds");
@@ -142,8 +114,6 @@ public class GridIndex<T extends LocationInterface> {
 
         if (shouldPerformCut(element)) {
             cut(element);
-//            long blockNumber = addNewBlock();
-//            this.saveElementToBlock(element, blockNumber); // řezal jsem takže přidávám element do nového bloku
         } else {
             GridAddressIndexes indexes = this.getElementGridAddressIndexes(element);
             this.saveElementToBlock(element, this.grid_address[indexes.x][indexes.y]);
@@ -152,8 +122,7 @@ public class GridIndex<T extends LocationInterface> {
         System.out.println("Number of blocks::: " + this.readNumberOfBlocks());
 
 
-//        mapAllBlocksToGridAddress();
-
+        saveToFile();
         printGrid();
     }
 
@@ -176,7 +145,7 @@ public class GridIndex<T extends LocationInterface> {
 
     private File initFile() {
         String fileName = "gridIndex-" + UUID.randomUUID() + ".bin";
-        this.fileName = fileName;
+        this.binFileName = fileName;
         try {
             File myObj = new File(fileName);
             if (myObj.createNewFile()) {
@@ -207,7 +176,6 @@ public class GridIndex<T extends LocationInterface> {
         // Celkem zapsáno: 16 bajtů
         int metadataSize = 20;
 
-        // Vyplníme zbytek řídicího bloku nulami
         int paddingSize = blockLength - metadataSize;
         byte[] padding = new byte[paddingSize];
         this.file.write(padding);
@@ -363,12 +331,6 @@ public class GridIndex<T extends LocationInterface> {
         return records;
     }
 
-
-    private void saveBlockToFile(List<T> block) {
-        //TODO: Uloží blok do souboru
-
-    }
-
     private byte[] serializeRecord(T obj) throws IOException {
         try {
             int recordSize = readRecordSize(); // z řídicího bloku
@@ -510,10 +472,6 @@ public class GridIndex<T extends LocationInterface> {
                         e.printStackTrace();
                     }
                 }
-//                if (element != null && (Math.abs(element.getLocation().getX() - location.getX()) <= 0 && Math.abs(element.getLocation().getY() - location.getY()) <= 0)) {
-//                    System.out.println("City: " + element.getName() + " is on the same location as new city: " + location.toString());
-//                    return true;
-//                }
             }
         }
         for (int cut : horizontal_cuts) {
@@ -531,58 +489,63 @@ public class GridIndex<T extends LocationInterface> {
         return false;
     }
 
-    public T findElementsByCoordinates(int x, int y) throws IllegalArgumentException {
+    public T findElementsByCoordinates(int x, int y) throws IllegalArgumentException, IOException {
         T foundElement = null;
-//        for (T element : elements) {
-//            if (element.getLocation().getX() == x && element.getLocation().getY() == y) {
-//                foundElement = element;
-//                break;
-//            }
-//        }
+        int xIndex = getElementXIndexInGridAddress(x);
+        int yIndex = getElementYIndexInGridAddress(y);
+        List<T> elements = this.readBlockFromFile(grid_address[xIndex][yIndex]);
+        for (T element : elements) {
+            if (element.getLocation().getX() == x && element.getLocation().getY() == y) {
+                foundElement = element;
+                break;
+            }
+        }
         return foundElement;
     }
 
-    public ArrayList<T> findElementBySegment(int x1, int y1, int x2, int y2) {
+    public ArrayList<T> findElementBySegment(int x1, int y1, int x2, int y2) throws IOException {
 
-//        if (x1 < 0 || x1 > width || y1 < 0 || y1 > height || x2 < 0 || x2 > width || y2 < 0 || y2 > height) {
-//            throw new IllegalArgumentException("Coordinates are out of bounds");
-//        }
-//
-//        int xStartIndex = -1;
-//        int xEndIndex = -1;
-//        for (int i = 0; i < vertical_cuts.length; i++) {
-//            if (vertical_cuts[i] > x1) {
-//                xStartIndex = i - 1;
-//            }
-//            if (vertical_cuts[i] >= x2) {
-//                xEndIndex = i;
-//            }
-//        }
-//
-//        int yStartIndex = -1;
-//        int yEndIndex = -1;
-//
-//        for (int i = 0; i < horizontal_cuts.length; i++) {
-//            if (horizontal_cuts[i] > y1) {
-//                yStartIndex = i - 1;
-//            }
-//            if (horizontal_cuts[i] >= y2) {
-//                yEndIndex = i;
-//            }
-//        }
-//
-//        ArrayList<T> elements = new ArrayList<>();
-//
-//        for (int i = xStartIndex; i < xEndIndex; i++) {
-//            for (int j = yStartIndex; j < yEndIndex; j++) {
-//                if (grid_address[i][j] != null && isElementInSearchDimensions(grid_address[i][j], x1, y1, x2, y2)) {
-//                    elements.add(grid_address[i][j]);
-//                }
-//            }
-//        }
-//
-//        return elements;
-        return new ArrayList<>();
+        if (x1 < 0 || x1 > width || y1 < 0 || y1 > height || x2 < 0 || x2 > width || y2 < 0 || y2 > height) {
+            throw new IllegalArgumentException("Coordinates are out of bounds");
+        }
+
+        int xStartIndex = -1;
+        int xEndIndex = -1;
+        for (int i = 0; i < vertical_cuts.length; i++) {
+            if (vertical_cuts[i] > x1) {
+                xStartIndex = i - 1;
+            }
+            if (vertical_cuts[i] >= x2) {
+                xEndIndex = i;
+            }
+        }
+
+        int yStartIndex = -1;
+        int yEndIndex = -1;
+
+        for (int i = 0; i < horizontal_cuts.length; i++) {
+            if (horizontal_cuts[i] > y1) {
+                yStartIndex = i - 1;
+            }
+            if (horizontal_cuts[i] >= y2) {
+                yEndIndex = i;
+            }
+        }
+
+        ArrayList<T> elements = new ArrayList<>();
+
+        for (int i = xStartIndex; i < xEndIndex; i++) {
+            for (int j = yStartIndex; j < yEndIndex; j++) {
+                List<T> blockElements = this.readBlockFromFile(grid_address[i][j]);
+                for (T element : blockElements) {
+                    if (isElementInSearchDimensions(element, x1, y1, x2, y2)) {
+                        elements.add(element);
+                    }
+                }
+            }
+        }
+
+        return elements;
     }
 
     private boolean isElementInSearchDimensions(T element, int x1, int y1, int x2, int y2) {

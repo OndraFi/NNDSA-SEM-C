@@ -4,7 +4,7 @@ import main.java.App;
 import main.java.City;
 import main.java.Road;
 import main.java.graph.Graph;
-import main.java.grid.GridIndex;
+import main.java.grid.GridFile;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,12 +14,12 @@ import java.util.ArrayList;
 public class CityForm extends JPanel {
     private JTextField cityNameField, xCoordField, yCoordField,populationField;
     private JButton addCityButton;
-    private final GridIndex<City> gridIndex;
+    private final GridFile<City> gridFile;
     private final Graph<String,City,Road> graph;
     private java.util.List<Runnable> cityListeners = new ArrayList<>();
 
-    public CityForm(GridIndex<City> gridIndex, Graph<String,City, Road> graph) {
-        this.gridIndex = gridIndex;
+    public CityForm(GridFile<City> gridFile, Graph<String,City, Road> graph) {
+        this.gridFile = gridFile;
         this.graph = graph;
         initializeComponents();
     }
@@ -69,9 +69,10 @@ public class CityForm extends JPanel {
 
             if (!cityName.isEmpty() && !xCoord.isEmpty() && !yCoord.isEmpty()) {
                 City city = new City(cityName,pupulation, x, y);
-                gridIndex.add(city);
+                gridFile.add(city);
                 graph.addVertex(App.generateKey(),city);
                 cityNameField.setText("");
+                populationField.setText("");
                 xCoordField.setText("");
                 yCoordField.setText("");
                 JOptionPane.showMessageDialog(this, "City added successfully!");

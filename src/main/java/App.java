@@ -1,25 +1,18 @@
 package main.java;
 
 import main.java.graph.Graph;
-import main.java.grid.GridIndex;
+import main.java.grid.GridFile;
 import main.java.gui.Gui;
 
-import javax.swing.*;
-import java.awt.*;
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Random;
 import java.util.UUID;
 
 public class App {
     Graph<String, City, Road> graph;
-    GridIndex<City> gridIndex;
+    GridFile<City> gridFile;
 
     public App() throws IOException {
-        this.gridIndex = new GridIndex<>(50, 70, 3, City.class);
+        this.gridFile = new GridFile<>(50, 70, 3, City.class);
         this.graph = new Graph<>();
 
 //        this.gridIndex.add(new City("a", 120, 5, 5));
@@ -34,7 +27,8 @@ public class App {
     }
 
     public void openWindow() {
-        Gui gui = new Gui(gridIndex,graph);
+        Gui gui = new Gui(gridFile,graph);
+        gui.promptGridIndexFileAction();
     }
 
     private void generateAssigmentGraph(){

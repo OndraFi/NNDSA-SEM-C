@@ -2,17 +2,17 @@ package main.java;
 
 import main.java.graph.EdgeData;
 import main.java.graph.Graph;
-import main.java.grid.GridIndex;
+import main.java.grid.GridFile;
 
 import java.io.*;
 
 public class GraphIO {
 
-    private final GridIndex<City> gridIndex;
+    private final GridFile<City> gridFile;
     private final Graph<String, City, Road> graph;
 
-    public GraphIO(GridIndex<City> gridIndex, Graph<String,City,Road> graph) {
-        this.gridIndex = gridIndex;
+    public GraphIO(GridFile<City> gridFile, Graph<String,City,Road> graph) {
+        this.gridFile = gridFile;
         this.graph = graph;
     }
 
@@ -27,7 +27,7 @@ public class GraphIO {
                     int x = Integer.parseInt(parts[3]);
                     int y = Integer.parseInt(parts[4]);
                     City city = new City(cityName, 50000,x, y);
-                    gridIndex.add(city);
+                    gridFile.add(city);
                     graph.addVertex(key, city);
                 } else if (parts[0].equals("e")) {
                     String from = parts[1];
